@@ -75,8 +75,8 @@ int main(void) {
 	I2C_Init();
 	LCD_Init();
 
-	LCD_SendStringData("Initializing", 0, 2, true);
-	LCD_SendStringData("System", 1, 5, true);
+	LCD_SendString("Initializing", 0, 2, true);
+	LCD_SendString("System", 1, 5, true);
 
 	IWDG_Refresh();
 
@@ -89,12 +89,12 @@ int main(void) {
 	delaymS(1500);
 	IWDG_Refresh();
 
-	LCD_SendStringData("Connecting", 0, 3, true);
-	LCD_SendStringData("WIFI", 1, 6, true);
+	LCD_SendString("Connecting", 0, 3, true);
+	LCD_SendString("WIFI", 1, 6, true);
 	WiFi_Init();
 
 	LCD_ClearRow(1);
-	LCD_SendStringData("Success!", 0, 4, true);
+	LCD_SendString("Success!", 0, 4, true);
 	delaymS(1500);
 
 	char smokebuff[50];
@@ -117,9 +117,9 @@ int main(void) {
 		}
 
 		// Display the data to LCD
-		LCD_SendStringData("Smoke ADC Val:", 0, 0, false);
+		LCD_SendString("Smoke ADC Val:", 0, 0, false);
 		sprintf(smokebuff, "%d", smoke_adc);
-		LCD_SendStringData(smokebuff, 1, 0, false);
+		LCD_SendString(smokebuff, 1, 0, false);
 		IWDG_Refresh();
 
 		// Loop every 1s
@@ -128,15 +128,14 @@ int main(void) {
 		// Send data to ThingSpeak server every 15 seconds
 		if ((millis - last_send_time) >= SEND_INTERVAL) {
 			LCD_ClearRow(1);
-			LCD_SendStringData("Sending data", 0, 0, true);
+			LCD_SendString("Sending data", 0, 0, true);
 
 			sendThingSpeak(smoke_adc, FIELD_NUM);
 			last_send_time = millis;
 
-			LCD_SendStringData("Success!", 1, 0, true);
+			LCD_SendString("Success!", 1, 0, true);
 			delaymS(1000);
-			LCD_ClearRow(0);
-			LCD_ClearRow(1);
+			LCD_Clear();
 		}
 		IWDG_Refresh();
 	}

@@ -70,7 +70,6 @@
 #define COLS     16    // Number of columns
 #define ROWS     2     // Number of rows
 
-
 uint8_t displayfunction;
 uint8_t displaycontrol;
 uint8_t displaymode;
@@ -168,4 +167,24 @@ void LCD_SetCursor(uint8_t col, uint8_t row) {
 void LCD_Clear(void) {
     LCD_SendCommand(LCD_CLEARDISPLAY);
     delayuS(2000);
+}
+
+void LCD_SendString(const char *str, uint8_t row, uint8_t col, bool clear) {
+	if (clear) {
+		LCD_ClearRow(row);
+	}
+
+	LCD_SetCursor(col, row);
+	while (*str) {
+        LCD_Send(*str++, Rs);
+    }
+}
+
+void LCD_ClearRow(uint8_t row) {
+	LCD_SetCursor(0, row);
+
+	for (int i = 0; i < 16; i++) {
+		LCD_Send(' ', Rs);                    // Clear 16 characters on the row
+	}
+	LCD_SetCursor(0, row);
 }

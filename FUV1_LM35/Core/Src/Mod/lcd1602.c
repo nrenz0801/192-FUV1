@@ -24,106 +24,167 @@
 #include "Mod/i2c1.h"
 #include "Mod/timing.h"
 
-#define SLAVE_ADDRESS_LCD 	0x27
 
-void LCD_SendCommand(uint8_t cmd) {
-    uint8_t upper_nibble = (cmd & 0xF0);
-    uint8_t lower_nibble = ((cmd << 4) & 0xF0);
-    uint8_t data_u = upper_nibble | 0x0C;  			// En = 1, Rs = 0
-    uint8_t data_l = lower_nibble | 0x0C;  			// En = 1, Rs = 0
+// LCD1602 commands and flags
+#define LCD_CLEARDISPLAY 0x01
+#define LCD_RETURNHOME 0x02
+#define LCD_ENTRYMODESET 0x04
+#define LCD_DISPLAYCONTROL 0x08
+#define LCD_CURSORSHIFT 0x10
+#define LCD_FUNCTIONSET 0x20
+#define LCD_SETCGRAMADDR 0x40
+#define LCD_SETDDRAMADDR 0x80
 
-    I2C_Write(SLAVE_ADDRESS_LCD, data_u);
-    data_u &= ~0x04; 								// En = 0
-    I2C_Write(SLAVE_ADDRESS_LCD, data_u);
+#define LCD_ENTRYRIGHT 0x00
+#define LCD_ENTRYLEFT 0x02
+#define LCD_ENTRYSHIFTINCREMENT 0x01
+#define LCD_ENTRYSHIFTDECREMENT 0x00
 
-    I2C_Write(SLAVE_ADDRESS_LCD, data_l);
-    data_l &= ~0x04; 								// En = 0
-    I2C_Write(SLAVE_ADDRESS_LCD, data_l);
-}
+#define LCD_DISPLAYON 0x04
+#define LCD_DISPLAYOFF 0x00
+#define LCD_CURSORON 0x02
+#define LCD_CURSOROFF 0x00
+#define LCD_BLINKON 0x01
+#define LCD_BLINKOFF 0x00
 
-void LCD_SendData(uint8_t data) {
-    uint8_t upper_nibble = (data & 0xF0);
-    uint8_t lower_nibble = ((data << 4) & 0xF0);
-    uint8_t data_u = upper_nibble | 0x0D;  			// En = 1, Rs = 1
-    uint8_t data_l = lower_nibble | 0x0D;  			// En = 1, Rs = 1
+#define LCD_DISPLAYMOVE 0x08
+#define LCD_CURSORMOVE 0x00
+#define LCD_MOVERIGHT 0x04
+#define LCD_MOVELEFT 0x00
 
-    I2C_Write(SLAVE_ADDRESS_LCD, data_u);
-    delayuS(1);
-    data_u &= ~0x04; 								// En = 0
-    I2C_Write(SLAVE_ADDRESS_LCD, data_u);
+#define LCD_8BITMODE 0x10
+#define LCD_4BITMODE 0x00
+#define LCD_2LINE 0x08
+#define LCD_1LINE 0x00
+#define LCD_5x10DOTS 0x04
+#define LCD_5x8DOTS 0x00
 
-    I2C_Write(SLAVE_ADDRESS_LCD, data_l);
-    delayuS(1);
-    data_l &= ~0x04; 								// En = 0
-    I2C_Write(SLAVE_ADDRESS_LCD, data_l);
-}
+#define LCD_BACKLIGHT 0x08
+#define LCD_NOBACKLIGHT 0x00
 
+#define En 0x04  // Enable bit
+#define Rw 0x02  // Read/Write bit
+#define Rs 0x01  // Register select bit
+
+#define ADDR     0x27  // I2C address for the LCD
+#define COLS     16    // Number of columns
+#define ROWS     2     // Number of rows
+
+uint8_t displayfunction;
+uint8_t displaycontrol;
+uint8_t displaymode;
+uint8_t backlightval = LCD_BACKLIGHT;
+uint8_t numlines;
 
 void LCD_Init(void) {
-    delaymS(250);                             // Wait for more than 15 ms after VCC rises to 4.5V
-    LCD_SendCommand(0x30);                    // Wake up
-    delaymS(5);                               // Wait for more than 4.1 ms
-    LCD_SendCommand(0x30);                    // Wake up #2
-    delayuS(110);                             // Wait for more than 100 us
-    LCD_SendCommand(0x30);                    // Wake up #3
-    delayuS(110);                             // Wait for more than 100 us
-    LCD_SendCommand(0x20);                    // Function Set: 4-bit mode
-    delayuS(110);                             // Wait for more than 100 us
-
-    // Continue with LCD initialization commands
-    LCD_SendCommand(0x28);                    // Function Set: 4-bit, 2 lines, 5x7 style
-    delayuS(110);                             // Wait for more than 100 us
-    LCD_SendCommand(0x08);                    // Display Switch: Display off
-    delayuS(110);                             // Wait for more than 100 us
-    LCD_SendCommand(0x01);                    // Screen Clear
-    delaymS(5);                               // Wait for more than 4.1 ms
-    LCD_SendCommand(0x02);                    // Cursor Return
-    delaymS(5);                               // Wait for more than 4.1 ms
-    LCD_SendCommand(0x06);                    // Input set: Increment Mode, No cursor shift
-    delayuS(110);                             // Wait for more than 100 us
-    LCD_SendCommand(0x0C);                    // Display Switch: Display on, cursor off, blink off
-    delayuS(110);                             // Wait for more than 100 us
+    displayfunction = LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS;
+    LCD_Begin(COLS, ROWS, 0);
 }
 
-void LCD_ClearRow(int row) {
-    LCD_put_cursor(row, 0);
-    for (int i = 0; i < 16; i++) {
-        LCD_SendData(' ');                    // Clear 16 characters on the row
+void LCD_Begin(uint8_t cols, uint8_t lines, uint8_t dotsize) {
+    if (lines > 1) {
+        displayfunction |= LCD_2LINE;
     }
-    LCD_put_cursor(row, 0);                   // Return cursor to the beginning of the row
+    numlines = lines;
+
+    if ((dotsize != 0) && (lines == 1)) {
+        displayfunction |= LCD_5x10DOTS;
+    }
+
+    delaymS(50);
+    LCD_ExpanderWrite(backlightval);
+    delaymS(1000);
+
+    LCD_Write4Bits(0x03 << 4);
+    delayuS(4500);
+
+    LCD_Write4Bits(0x03 << 4);
+    delayuS(4500);
+
+    LCD_Write4Bits(0x03 << 4);
+    delayuS(150);
+
+    LCD_Write4Bits(0x02 << 4);
+
+    LCD_SendCommand(LCD_FUNCTIONSET | displayfunction);
+
+    displaycontrol = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
+    LCD_Display();
+
+    LCD_Clear();
+
+    displaymode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
+    LCD_SendCommand(LCD_ENTRYMODESET | displaymode);
+
+    LCD_Home();
 }
 
-
-void LCD_put_cursor(int row, int col)
-{
-    switch (row)
-    {
-        case 0:
-            col |= 0x80;
-            break;
-        case 1:
-            col |= 0xC0;
-            break;
-    }
-
-    LCD_SendCommand(col);
+void LCD_SendCommand(uint8_t command) {
+    LCD_Send(command, 0);
 }
 
-void LCD_SendStringData(char *str, int row, int col, bool clear)
-{
-    // Clear the specified row
-    if (clear) {
-    	LCD_ClearRow(row);
+void LCD_Send(uint8_t value, uint8_t mode) {
+    uint8_t highnib = value & 0xF0;
+    uint8_t lownib = (value << 4) & 0xF0;
+    LCD_Write4Bits((highnib) | mode);
+    LCD_Write4Bits((lownib) | mode);
+}
+
+void LCD_Write4Bits(uint8_t value) {
+    LCD_ExpanderWrite(value);
+    LCD_PulseEnable(value);
+}
+
+void LCD_ExpanderWrite(uint8_t data) {
+    I2C_Write(ADDR, (int)(data) | backlightval);
+}
+
+void LCD_PulseEnable(uint8_t data) {
+    LCD_ExpanderWrite(data | En);
+    delayuS(1);
+    LCD_ExpanderWrite(data & ~En);
+    delayuS(50);
+}
+
+void LCD_Display(void) {
+    displaycontrol |= LCD_DISPLAYON;
+    LCD_SendCommand(LCD_DISPLAYCONTROL | displaycontrol);
+}
+
+void LCD_Home(void) {
+    LCD_SendCommand(LCD_RETURNHOME);
+    delayuS(2000);
+}
+
+void LCD_SetCursor(uint8_t col, uint8_t row) {
+    int row_offsets[] = {0x00, 0x40, 0x14, 0x54};
+    if (row > numlines) {
+        row = numlines - 1;
     }
+    LCD_SendCommand(LCD_SETDDRAMADDR | (col + row_offsets[row]));
+}
 
-    // Delay to ensure the row is cleared properly
-    delaymS(10);
+void LCD_Clear(void) {
+    LCD_SendCommand(LCD_CLEARDISPLAY);
+    delayuS(2000);
+}
 
-    // Put the cursor at the specified row and column
-    LCD_put_cursor(row, col);
+void LCD_SendString(const char *str, uint8_t row, uint8_t col, bool clear) {
+	if (clear) {
+		LCD_ClearRow(row);
+	}
 
-    // Send the string data to the LCD
-    while (*str) {
-        LCD_SendData(*str++);
+	LCD_SetCursor(col, row);
+	while (*str) {
+        LCD_Send(*str++, Rs);
     }
+}
+
+void LCD_ClearRow(uint8_t row) {
+	LCD_SetCursor(0, row);
+
+	for (int i = 0; i < 16; i++) {
+		LCD_Send(' ', Rs);                    // Clear 16 characters on the row
+	}
+	LCD_SetCursor(0, row);
 }
