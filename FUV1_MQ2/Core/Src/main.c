@@ -59,26 +59,33 @@
 
 #include <stdio.h>				// For sprintf()
 
-#define SEND_INTERVAL 	15000 	// 15 seconds interval for sending to cloud
+#define SEND_INTERVAL 	100000 	// 100 seconds interval for sending to cloud
 #define THRESHOLD 		350		// (ADC) System will trigger alarm if this value is reached
 #define FIELD_NUM 		1		// ThingSpeak Field number for the specific sensor
+#define WIFI_DELAY		1000	// (ms)
+#define INITIAL_DELAY	25		// (s)
 
 /************************** Function Prototypes *******************************/
 
 void Buzzer_Init(void);
+void TIM3_Init(void);
+void TIM3_IRQHandler(void);
+volatile uint32_t seconds_count = 0;
 
 /************************* Main Function **************************************/
 
 int main(void) {
+	IWDG_Refresh();
+
 	IWDG_Init();
 	TIM2_Init();
+	TIM3_Init();
 	I2C_Init();
 	LCD_Init();
 
 	LCD_SendString("Initializing", 0, 2, true);
 	LCD_SendString("System", 1, 5, true);
-
-	IWDG_Refresh();
+	delaymS(1000);
 
 	Buzzer_Init();
 	ADC_Init();
@@ -86,27 +93,35 @@ int main(void) {
 	usart1_Init();
 	usart2_Init();
 
-	delaymS(1500);
-	IWDG_Refresh();
-
+	delaymS(WIFI_DELAY);
 	LCD_SendString("Connecting", 0, 3, true);
 	LCD_SendString("WIFI", 1, 6, true);
 	WiFi_Init();
+	IWDG_Refresh();
 
 	LCD_ClearRow(1);
 	LCD_SendString("Success!", 0, 4, true);
 	delaymS(1500);
 
-	char smokebuff[50];
-	millis = 0;
-	uint32_t last_send_time = 0;
-
 	LCD_ClearRow(0);
-	IWDG_Refresh();
+
+	char smokebuff[50];
+
+	int delayed = 0;
+	int interval_start = 1;
+
+//	char timebuff[100];
+	seconds_count = 0;
 
 	/* Loop forever */
 	while (1) {
-		int smoke_adc = MQ2_GetVal();		// Store converted data to a variable
+		IWDG_Refresh();
+//		sprintf(timebuff, "%u\r\n", seconds_count);
+//		serialPrint(timebuff);
+
+		/******************************** Sense and Display to LCD ********************************/
+		// Sense data
+		int smoke_adc = MQ2_GetVal();
 
 		// Monitor the temperature
 		if (smoke_adc >= THRESHOLD) {
@@ -119,25 +134,33 @@ int main(void) {
 		// Display the data to LCD
 		LCD_SendString("Smoke ADC Val:", 0, 0, false);
 		sprintf(smokebuff, "%d", smoke_adc);
-		LCD_SendString(smokebuff, 1, 0, false);
+		LCD_SendString(smokebuff, 1, 0, true);
 		IWDG_Refresh();
+		/******************************************************************************************/
+
+		if ((seconds_count >= (INITIAL_DELAY - WIFI_DELAY/1000)) || delayed) {
+			if (interval_start) {
+				serialPrint("initial delay done\r\n");
+				interval_start = 0;
+				delayed = 1;
+				seconds_count = 0;
+			}
+
+			if (seconds_count >= 100) {
+				// transmit to Thingspeak
+				LCD_ClearRow(1);
+				LCD_SendString("Sending data", 0, 0, true);
+
+				sendThingSpeak(smoke_adc, FIELD_NUM);
+
+				LCD_SendString("Success!", 1, 0, true);
+				seconds_count = 0;
+			}
+		}
 
 		// Loop every 1s
 		delaymS(1000);
-
-		// Send data to ThingSpeak server every 15 seconds
-		if ((millis - last_send_time) >= SEND_INTERVAL) {
-			LCD_ClearRow(1);
-			LCD_SendString("Sending data", 0, 0, true);
-
-			sendThingSpeak(smoke_adc, FIELD_NUM);
-			last_send_time = millis;
-
-			LCD_SendString("Success!", 1, 0, true);
-			delaymS(1000);
-			LCD_Clear();
-		}
-		IWDG_Refresh();
+		LCD_Clear();
 	}
 }
 
@@ -151,4 +174,30 @@ void Buzzer_Init(void) {
 	GPIOB->MODER &= ~(3 << 2);  		// Clear mode bits
 	GPIOB->MODER |= (1 << 2);			// Output mode
 	GPIOB->OTYPER &= ~(1 << 1);			// Push-pull output
+}
+
+void TIM3_Init(void) {
+    // Enable TIM3 clock
+    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
+
+    // Configure TIM3: count up, prescaler for 1 ms tick, update on overflow
+    TIM3->PSC = 16000 - 1;  // Prescaler to divide the clock by 16000 (1 kHz timer clock)
+    TIM3->ARR = 1000 - 1;   // Auto-reload value to generate 1-second tick
+    TIM3->CNT = 0;          // Clear counter
+
+    // Enable the update interrupt
+    TIM3->DIER |= TIM_DIER_UIE;
+
+    // Enable the TIM3 interrupt in the NVIC
+    NVIC_EnableIRQ(TIM3_IRQn);
+
+    // Enable the timer
+    TIM3->CR1 |= TIM_CR1_CEN;
+}
+
+void TIM3_IRQHandler(void) {
+    if (TIM3->SR & TIM_SR_UIF) {  // Check for update interrupt flag
+        TIM3->SR &= ~TIM_SR_UIF;  // Clear update interrupt flag
+        seconds_count++;
+    }
 }

@@ -23,9 +23,9 @@
  */
 
 #include "Mod/timing.h"
+#include "Mod/usart2.h"
 
-
-volatile uint32_t millis = 0;
+volatile int millis = 0;
 
 void IWDG_Init(void) {
     // Enable the LSI clock
@@ -70,7 +70,7 @@ void delayuS(uint32_t us) {
     TIM2->CR1 |= (1 << 0);								// Enable timer
 
     // Wait for the specified number of microseconds
-    while (TIM2->CNT < us);
+    while (TIM2->CNT < us){};
 }
 
 void delaymS(uint32_t ms) {

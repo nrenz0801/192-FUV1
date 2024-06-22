@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 
-extern volatile uint32_t millis;
+extern volatile int millis;
 
 void IWDG_Init(void);
 void IWDG_Refresh(void);

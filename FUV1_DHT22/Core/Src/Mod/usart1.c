@@ -103,15 +103,15 @@ bool sendESP(const char* s, const char* response) {
 
 		// Check for the keyword "OK" in the received data
 		if (strstr(buffer, response) != NULL) {
-			serialPrint("RESPONSE RECEIVED!!\r\n"); // echo the command to serial monitor
+//			serialPrint("RESPONSE RECEIVED!!\r\n"); // echo the command to serial monitor
 			break;
 		}
 	}
 
 	buffer[i] = '\0';
 	// transmit the response to the serial monitor
-	serialPrint(buffer);
-	serialPrint("\r\n");
+//	serialPrint(buffer);
+//	serialPrint("\r\n");
 	return true;
 }
 
@@ -121,11 +121,11 @@ void WiFi_Init(void) {
 	char data[200];
 
 	while (true) {
-		serialPrint("Attempting WiFi Initialization...\r\n");
+//		serialPrint("Attempting WiFi Initialization...\r\n");
 
 		if (!sendESP("AT\r\n", "OK")) {
 			delaymS(5000);
-			serialPrint("AT command failed. Retrying...\r\n");
+//			serialPrint("AT command failed. Retrying...\r\n");
 			continue;
 		}
 
@@ -134,7 +134,7 @@ void WiFi_Init(void) {
 
 		if (!sendESP("AT+CWMODE=1\r\n", "OK")) {
 			delaymS(5000);
-			serialPrint("CWMODE command failed. Retrying...\r\n");
+//			serialPrint("CWMODE command failed. Retrying...\r\n");
 			continue;
 		}
 
@@ -144,13 +144,13 @@ void WiFi_Init(void) {
 		sprintf(data, "AT+CWJAP=\"%s\",\"%s\"\r\n", SSID, PASS);
 		if (!sendESP(data, "OK")) {
 			delaymS(5000);
-			serialPrint("CWJAP command failed. Retrying...\r\n");
+//			serialPrint("CWJAP command failed. Retrying...\r\n");
 			continue;
 		}
 
 		// If all commands succeeded
 		IWDG_Refresh();
-		serialPrint("WiFi Initialization Success!\r\n");
+//		serialPrint("WiFi Initialization Success!\r\n");
 		break;
 	}
 }
@@ -169,11 +169,11 @@ void sendThingSpeak(int val, int field) {
     IWDG_Refresh();
 
     while (true) {
-        serialPrint("Attempting Data Transmission to ThingSpeak...\r\n");
+//        serialPrint("Attempting Data Transmission to ThingSpeak...\r\n");
 
         if (!sendESP("AT+CIPMUX=1\r\n", "OK")) {
             delaymS(5000);
-            serialPrint("CIPMUX command failed. Retrying...\r\n");
+//            serialPrint("CIPMUX command failed. Retrying...\r\n");
             continue;
         }
 
@@ -182,7 +182,7 @@ void sendThingSpeak(int val, int field) {
 
         if (!sendESP("AT+CIPSTART=0,\"TCP\",\"api.thingspeak.com\",80\r\n", "OK")) {
             delaymS(5000);
-            serialPrint("CIPSTART command failed. Retrying...\r\n");
+//            serialPrint("CIPSTART command failed. Retrying...\r\n");
             continue;
         }
 
@@ -191,7 +191,7 @@ void sendThingSpeak(int val, int field) {
 
         if (!sendESP(cipsend_cmd, ">")) {
         	delaymS(5000);
-            serialPrint("CIPSEND command failed. Retrying...\r\n");
+//            serialPrint("CIPSEND command failed. Retrying...\r\n");
             continue;
         }
 
@@ -205,12 +205,12 @@ void sendThingSpeak(int val, int field) {
 
         if (!sendESP("AT+CIPCLOSE=0\r\n", "OK")) {
             delaymS(5000);
-            serialPrint("CIPCLOSE command failed. Retrying...\r\n");
+//            serialPrint("CIPCLOSE command failed. Retrying...\r\n");
             continue;
         }
 
         IWDG_Refresh();
-        serialPrint("Data Transmission Success!\r\n");
+//        serialPrint("Data Transmission Success!\r\n");
         break;
     }
 }
